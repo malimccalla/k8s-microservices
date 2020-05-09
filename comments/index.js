@@ -1,8 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { randomBytes } = require('crypto');
-const axios = require('axios');
 const cors = require('cors');
+const axios = require('axios');
 
 const app = express();
 app.use(bodyParser.json());
@@ -17,34 +17,54 @@ app.get('/posts/:id/comments', (req, res) => {
 app.post('/posts/:id/comments', async (req, res) => {
   const commentId = randomBytes(4).toString('hex');
   const { content } = req.body;
-  const postId = req.params.id;
 
-  const comments = commentsByPostId[postId] || [];
+  const comments = commentsByPostId[req.params.id] || [];
 
-  comments.push({ id: commentId, content });
+  comments.push({ id: commentId, content, status: 'pending' });
 
-  commentsByPostId[postId] = comments;
+  commentsByPostId[req.params.id] = comments;
 
-  console.log('comment serivce post id=======', postId);
-
-  const event = {
+  await axios.post('http://localhost:4005/events', {
     type: 'CommentCreated',
-    data: { id: commentId, content, postId: postId },
-  };
-
-  console.log('EVENT SENDING', event);
-
-  await axios.post('http://localhost:5005/events', event);
+    data: {
+      id: commentId,
+      content,
+      postId: req.params.id,
+      status: 'pending'
+    }
+  });
 
   res.status(201).send(comments);
 });
 
-app.post('/events', (req, res) => {
-  console.log('Recieved event: ', req.body.type);
+app.post('/events', async (req, res) => {
+  console.log('Event Received:', req.body.type);
+
+  const { type, data } = req.body;
+
+  if (type === 'CommentModerated') {
+    const { postId, id, status, content } = data;
+    const comments = commentsByPostId[postId];
+
+    const comment = comments.find(comment => {
+      return comment.id === id;
+    });
+    comment.status = status;
+
+    await axios.post('http://localhost:4005/events', {
+      type: 'CommentUpdated',
+      data: {
+        id,
+        status,
+        postId,
+        content
+      }
+    });
+  }
 
   res.send({});
 });
 
-app.listen(5001, () => {
-  console.log('Listening on 5001');
+app.listen(4001, () => {
+  console.log('Listening on 4001');
 });
