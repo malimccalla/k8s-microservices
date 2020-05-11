@@ -13,7 +13,7 @@ spec:
         app: client
     spec:
       containers:
-        - name: client
+        - name: k8s-client
           image: malimccalla/k8s-client
 ---
 apiVersion: v1
